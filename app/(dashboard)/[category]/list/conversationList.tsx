@@ -1,6 +1,6 @@
 import { Send } from "lucide-react";
 import { useQueryState } from "nuqs";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import { ConversationListItem as ConversationItem } from "@/app/types/global";
@@ -67,59 +67,77 @@ export const List = () => {
     changeSelectedConversations,
   );
 
-  const toggleConversation = (id: number, isSelected: boolean, shiftKey: boolean) => {
-    if (allConversationsSelected) {
-      // If all conversations are selected, toggle the selected conversation
-      setAllConversationsSelected(false);
-      setSelectedConversations(conversations.flatMap((c) => (c.id === id ? [] : [c.id])));
-    } else {
-      onShiftSelectConversation(id, isSelected, shiftKey);
-    }
-  };
+  const toggleConversation = useCallback(
+    (id: number, isSelected: boolean, shiftKey: boolean) => {
+      if (allConversationsSelected) {
+        // If all conversations are selected, toggle the selected conversation
+        setAllConversationsSelected(false);
+        setSelectedConversations(conversations.flatMap((c) => (c.id === id ? [] : [c.id])));
+      } else {
+        onShiftSelectConversation(id, isSelected, shiftKey);
+      }
+    },
+    [allConversationsSelected, conversations, onShiftSelectConversation, setSelectedConversations],
+  );
 
-  const toggleAllConversations = (forceValue?: boolean) => {
-    setAllConversationsSelected((prev) => forceValue ?? !prev);
-    clearSelectedConversations();
-  };
+  const toggleAllConversations = useCallback(
+    (forceValue?: boolean) => {
+      setAllConversationsSelected((prev) => forceValue ?? !prev);
+      clearSelectedConversations();
+    },
+    [clearSelectedConversations],
+  );
 
-  const handleBulkUpdate = (status: "open" | "closed" | "spam") => {
-    setIsBulkUpdating(true);
-    try {
-      const conversationFilter = allConversationsSelected
-        ? conversations.length <= 25 && !hasNextPage
-          ? conversations.map((c) => c.id)
-          : input
-        : selectedConversations;
+  const handleBulkUpdate = useCallback(
+    (status: "open" | "closed" | "spam") => {
+      setIsBulkUpdating(true);
+      try {
+        const conversationFilter = allConversationsSelected
+          ? conversations.length <= 25 && !hasNextPage
+            ? conversations.map((c) => c.id)
+            : input
+          : selectedConversations;
 
-      bulkUpdate(
-        {
-          conversationFilter,
-          status,
-        },
-        {
-          onSuccess: ({ updatedImmediately }) => {
-            setAllConversationsSelected(false);
-            clearSelectedConversations();
-            void utils.mailbox.conversations.list.invalidate();
-            void utils.mailbox.conversations.count.invalidate();
-
-            if (updatedImmediately) {
-              const ticketsText = allConversationsSelected
-                ? "All matching tickets"
-                : `${selectedConversations.length} ticket${selectedConversations.length === 1 ? "" : "s"}`;
-
-              const actionText = status === "open" ? "reopened" : status === "closed" ? "closed" : "marked as spam";
-              toast.success(`${ticketsText} ${actionText}`);
-            } else {
-              toast.success("Starting update, refresh to see status.");
-            }
+        bulkUpdate(
+          {
+            conversationFilter,
+            status,
           },
-        },
-      );
-    } finally {
-      setIsBulkUpdating(false);
-    }
-  };
+          {
+            onSuccess: ({ updatedImmediately }) => {
+              setAllConversationsSelected(false);
+              clearSelectedConversations();
+              void utils.mailbox.conversations.list.invalidate();
+              void utils.mailbox.conversations.count.invalidate();
+
+              if (updatedImmediately) {
+                const ticketsText = allConversationsSelected
+                  ? "All matching tickets"
+                  : `${selectedConversations.length} ticket${selectedConversations.length === 1 ? "" : "s"}`;
+
+                const actionText = status === "open" ? "reopened" : status === "closed" ? "closed" : "marked as spam";
+                toast.success(`${ticketsText} ${actionText}`);
+              } else {
+                toast.success("Starting update, refresh to see status.");
+              }
+            },
+          },
+        );
+      } finally {
+        setIsBulkUpdating(false);
+      }
+    },
+    [
+      allConversationsSelected,
+      conversations,
+      hasNextPage,
+      input,
+      selectedConversations,
+      bulkUpdate,
+      clearSelectedConversations,
+      utils,
+    ],
+  );
 
   useEffect(() => {
     const currentRef = loadMoreRef.current;
